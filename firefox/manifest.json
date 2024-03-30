@@ -1,0 +1,34 @@
+{
+    "manifest_version": 3,
+    "name": "Spacealpha Buddy",
+    "version": "0.1",
+    "description": "Record client-side data of SpaceAlpha's Empire tab",
+    "permissions": [
+      "tabs",
+      "activeTab",
+      "storage",
+      "clipboardWrite"
+    ],
+    "action": {
+      "default_popup": "popup.html",
+      "default_icon": {
+        "128": "rss/icon.png"
+      }
+    },
+    "content_scripts": [
+      {
+        "matches": ["https://spacealpha.net/*"],
+        "js": ["content.js"]
+      }
+    ],
+    "icons": {
+      "128": "rss/icon.png"
+    },
+    "browser_specific_settings": {
+      "gecko": {
+        "strict_min_version": "109.0",
+        "id": "spacealpha_buddy@kurak_enterprises"
+      }
+    }
+  }
+  
