@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Spacealpha Buddy",
-    "version": "0.2",
+    "version": "0.3",
     "description": "Record client-side data for the SpaceAlpha game",
     "permissions": [
       "tabs",
@@ -10,7 +10,7 @@
       "clipboardWrite"
     ],
     "action": {
-      "default_popup": "popup.html",
+      "default_popup": "popup/popup.html",
       "default_icon": {
         "128": "rss/icon.png"
       }

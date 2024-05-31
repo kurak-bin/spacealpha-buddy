@@ -142,135 +142,170 @@ function extractEmpireInfo() {
 async function calculatePlayerShares(investmentData) {
   // Object to store total shares and stake of each player
   const playerShares = {};
-  let totalShares = 0;
+  let total_shares = 0,
+    total_invested = 0,
+    net_invested = 0; // invested - sold
 
   let investment_owner = await loadLocalData("investment_owner");
-  playerShares[investment_owner] = {totalShares: 990, totalInvested: 0};
-  playerShares["#SYSTEM#"] = {totalShares: 10, totalInvested: 0};
+  playerShares[investment_owner] = { total_shares: 990, net_invested: 0 };
+  playerShares["#SYSTEM#"] = { total_shares: 10, net_invested: 0 };
 
   // Calculate total shares across all players
-  investmentData.forEach(entry => {
+  investmentData.forEach((entry) => {
     let type = 1;
-    if (entry.order_type === 'sell') { type = -1; }
-    totalShares += entry.shares * type;
+    if (entry.order_type === "sell") {
+      type = -1;
+    }
+    total_shares += entry.shares * type;
+    net_invested += entry.shares * type * entry.share_price;
   });
-  totalShares += 990 + 10;
+  total_shares += 990 + 10;
 
   // Iterate through each investment entry
-  investmentData.forEach(entry => {
-      let { player, shares, share_price, order_type } = entry;
+  investmentData.forEach((entry) => {
+    let { player, shares, share_price, order_type } = entry;
 
-      if (order_type === 'sell') shares *= -1;
+    if (order_type === "sell") shares *= -1;
 
-      // Update player's total shares
-      if (player in playerShares) {
-          playerShares[player].totalShares += shares;
-          playerShares[player].totalInvested += shares * share_price;
-      } else {
-          playerShares[player] = { totalShares: shares, totalInvested: shares * share_price };
-      }
+    // Update player's total shares
+    if (player in playerShares) {
+      playerShares[player].total_shares += shares;
+      playerShares[player].net_invested += shares * share_price;
+    } else {
+      playerShares[player] = {
+        total_shares: shares,
+        net_invested: shares * share_price,
+      };
+    }
   });
 
   // Convert playerShares object to an array of [player, data] pairs
   const playerSharesArray = Object.entries(playerShares);
 
   // Sort playerSharesArray in descending order based on total invested
-  playerSharesArray.sort((a, b) => b[1].totalInvested - a[1].totalInvested);
+  playerSharesArray.sort((a, b) => b[1].net_invested - a[1].net_invested);
 
   let output = "";
 
+  playerSharesArray.forEach(([player, data]) => {
+    if (data.net_invested > 0) total_invested += data.net_invested;
+  })
+
   // Print player data in descending order of investment
   playerSharesArray.forEach(([player, data]) => {
-      const shares = data.totalShares;
-      const percentage = (shares / totalShares) * 100;
-      output += `${player}: ${shares} shares (${percentage.toFixed(2)}%) | ${data.totalInvested.toExponential(2)}\n\n`
+    const shares = data.total_shares;
+    const stake_percent = (shares / total_shares) * 100;
+    let invested_percent = 0;
+    let net_invest_str;
+    if (data.net_invested >= 0) {
+      invested_percent = (data.net_invested / total_invested) * 100;
+      net_invest_str = " " + data.net_invested.toExponential(3).padEnd(9);
+    } else {
+      net_invest_str = data.net_invested.toExponential(3).padEnd(9);
+    }
+
+    // output += `${player}: ${shares} shares (${percentage.toFixed(2)}%) | ${data.net_invested.toExponential(3)}\n\n`
+    output += `${player.padEnd(20)}: ${shares.toString().padStart(6)} shares (${stake_percent.toFixed(2).padStart(5)}%)` + 
+      ` | Invested: ${net_invest_str} (${invested_percent.toFixed(2).padStart(5)}%)\n\n`;
   });
-  output += `Total shares: ${totalShares}`
+  output += `Total Shares: ${total_shares}\n`;
+  output += `Total Investment: ${net_invested.toExponential(3)}`;
 
   navigator.clipboard.writeText(output);
 }
 
-function isWithinOneMinute(time1, time2) {
-    // Parse time strings into Date objects
-    const date1 = new Date(`2000-01-01T${time1}`);
-    const date2 = new Date(`2000-01-01T${time2}`);
-
-    // Calculate the difference in milliseconds
-    const difference = Math.abs(date1 - date2);
-
-    // Check if the difference is less than or equal to 1 minute
-    return difference <= 61 * 1000;
-}
-
 async function extractInvestmentInfo() {
+  let investment_table = null, earnings_reports = [];
+  let name = null;
+
   let popup = document.querySelector("investment-popup");
-  let name = popup.querySelector(".cdk-drag-handle.popupTitle").innerText;
-  let investment_table = popup.querySelector("investment-trades").firstChild;
-  let rows = investment_table.querySelectorAll("tr .ng-star-inserted");
-
-  investment_name = name;
-
-  if (!(name in investment_data)) investment_data[name] = [];
-
-  let investment = investment_data[name];
-  let last_entry = null;
-  if (investment.length > 0) {
-    last_entry = investment[investment.length - 1];
+  if (popup !== null) {
+    name = popup.querySelector(".cdk-drag-handle.popupTitle").innerText;
+    investment_table = popup.querySelector("investment-trades");
   }
-  console.log("Last Entry:", last_entry);
+  if (investment_table !== null) { // if looking at share purchases
+    investment_table = investment_table.firstChild;
+    let rows = investment_table.querySelectorAll("tr .ng-star-inserted");
 
-  let new_entries = [];
+    investment_name = name;
 
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    let buy_data = row.children[0].firstChild;
-    let player = buy_data.textContent.trim().slice(0, -4);
-    let order_type;
-    if (buy_data.textContent.trim().slice(-3) === "<<<") {
-      order_type = "buy";
-    } else {
-      order_type = "sell";
+    if (!(name in investment_data)) investment_data[name] = [];
+
+    let investment = investment_data[name];
+    let last_entry = null;
+    if (investment.length > 0) {
+      last_entry = investment[investment.length - 1];
     }
-    let shares = buy_data.nextSibling.nextSibling.textContent.trim();
-    let share_price = row.children[1].firstChild.innerText.trim();
-    let rel_time_bought = row.children[2].innerText; // convert to absolute
+    // console.log("Last Entry:", last_entry);
 
-    shares = symbolToNumber(shares);
-    share_price = symbolToNumber(share_price);
+    let new_entries = [];
 
-    let [abs_time, hour_accurate] = relativeToAbsTime(rel_time_bought); // .toLocaleString();
-    let abs_date = `${abs_time.getMonth() + 1}/${abs_time.getDate()}/${abs_time.getFullYear()}`;
-    let date_time;
-    if (hour_accurate) date_time = createUTCTimestamp(abs_time);
-    else date_time = null;
+    for (let i = 0; i < rows.length; i++) {
+      let row = rows[i];
+      let buy_data = row.children[0].firstChild;
+      let player = buy_data.textContent.trim().slice(0, -4);
+      let order_type;
+      if (buy_data.textContent.trim().slice(-3) === "<<<") {
+        order_type = "buy";
+      } else {
+        order_type = "sell";
+      }
+      let shares = buy_data.nextSibling.nextSibling.textContent.trim();
+      let share_price = row.children[1].firstChild.innerText.trim();
+      let rel_time_bought = row.children[2].innerText; // convert to absolute
 
-    // check if duplicate data
-    //(last_entry["time"] === null || date_time === null || isWithinOneMinute(last_entry["time"], date_time)))
-    if (
-      last_entry !== null &&
-      last_entry["player"] === player &&
-      last_entry["shares"] === shares &&
-      last_entry["share_price"] === share_price &&
-      last_entry["order_type"] === order_type &&
-      last_entry["date"] === abs_date
-    ) {
-      break;
-    } else {
-      new_entries.push({
-        player: player,
-        shares: shares,
-        share_price: share_price,
-        order_type: order_type,
-        date: abs_date,
-        time: date_time,
-      });
-      console.log("new entry by", player);
+      shares = symbolToNumber(shares);
+      share_price = symbolToNumber(share_price);
+
+      let [abs_time, hour_accurate] = relativeToAbsTime(rel_time_bought); // .toLocaleString();
+      let abs_date = `${
+        abs_time.getMonth() + 1
+      }/${abs_time.getDate()}/${abs_time.getFullYear()}`;
+      let date_time;
+      if (hour_accurate) date_time = createUTCTimestamp(abs_time);
+      else date_time = null;
+
+      if (
+        last_entry !== null &&
+        last_entry["player"] === player &&
+        last_entry["shares"] === shares &&
+        last_entry["share_price"] === share_price &&
+        last_entry["order_type"] === order_type &&
+        last_entry["date"] === abs_date
+      ) {
+        break;
+      } else {
+        new_entries.push({
+          player: player,
+          shares: shares,
+          share_price: share_price,
+          order_type: order_type,
+          date: abs_date,
+          time: date_time,
+        });
+      }
     }
+    for (let i = new_entries.length - 1; i >= 0; i--) {
+      investment_data[name].push(new_entries[i]);
+    }
+    storeData("investment_data", investment_data);
+    calculatePlayerShares(investment_data[investment_name]);
+    return
   }
-  for (let i = new_entries.length - 1; i >= 0; i--) {
-    investment_data[name].push(new_entries[i]);
-  }
-  console.log(investment_data);
+
+  document.querySelectorAll(".cdk-drag-handle.popupTitle").forEach(elem => {
+    console.log(`elem: ${elem.innerText}`)
+    if (elem.innerText.includes("Earning report")) {
+      earnings_report.push(elem);
+    }
+  });
+  // earnings_reports.forEach(report => {
+
+  // })
+  // if (earnings_report.length > 0) {
+  //   console.log(earnings_report[0].innerText);
+  // }
+
 }
 
 function relativeToAbsTime(time_text) {
@@ -278,7 +313,6 @@ function relativeToAbsTime(time_text) {
   let hour_accurate = true;
   if (time_text.includes("seconds")) {
     rel_time_ms = parseInt(time_text.split(" ")[0]) * 1000;
-    if (rel_time_ms === 0) hour_accurate = false; // not reliable at 0 seconds
   } else if (time_text.includes("minutes")) {
     time_text = time_text.split(" ")[0].split(":");
     rel_time_ms = (parseInt(time_text[0]) * 60 + parseInt(time_text[1])) * 1000;
@@ -416,7 +450,7 @@ function exportInvestmentJson() {
   const blob = new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  link.setAttribute("download", "investment-report_" + getFormattedTimestamp());
+  link.setAttribute("download", "investment-report_" + getFormattedTimestamp()+".json");
   link.setAttribute("href", url);
   document.body.appendChild(link);
   link.click();
@@ -430,7 +464,6 @@ function exportSingleReport(topic, format) {
       topic_data = planets_data["resources"];
     } else if (topic === "units") {
       topic_data = planets_data["units"];
-      console.log(topic_data);
     }
 
     if (format === "csv") topic_data = convertToCsv(topic_data, topic);
@@ -472,11 +505,9 @@ async function storeEmpireInfo() {
   browser.storage.local.set({ empire_data: empire_data });
 }
 
-function checkForPageChange() {
-  if (window.location.href != current_url) {
-    current_url = window.location.href;
-    setTimeout(onLoad, page_load_delay);
-  }
+async function resetInvestmentData() {
+  let data = await loadLocalData("investment_data");
+  investment_data = data || {};
 }
 
 function clearStorage() {
@@ -493,16 +524,15 @@ browser.runtime.onMessage.addListener((message) => {
     case "storeEmpireInfo":
       extractEmpireInfo();
       storeEmpireInfo();
-      // storeData('empire_data', empire_data);
       break;
     case "exportResourceCsv":
       extractEmpireInfo();
       exportSingleReport("resources", "csv");
       break;
     case "storeInvestmentInfo":
-      extractInvestmentInfo();
-      storeData("investment_data", investment_data);
-      calculatePlayerShares(investment_data[investment_name]);
+      resetInvestmentData().then(() => {
+        extractInvestmentInfo();
+      });
       break;
     case "exportInvestmentJson":
       exportInvestmentJson();
@@ -516,10 +546,3 @@ browser.runtime.onMessage.addListener((message) => {
   }
 });
 
-// load data
-(async () => {
-  let data = await loadLocalData("investment_data");
-  console.log(investment_data);
-  investment_data = data || {};
-  console.log(investment_data);
-})();

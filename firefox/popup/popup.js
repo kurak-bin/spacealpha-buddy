@@ -1,12 +1,12 @@
 function sendMessage(command) {
   // Send message to content script
   browser.tabs.query({ active: true, currentWindow: true }).then((tabs) => {
-    browser.tabs.sendMessage(tabs[0].id, { command: command });
+    try {
+      browser.tabs.sendMessage(tabs[0].id, { command: command });
+    } catch (e) {
+      console.error(e);
+    }
   });
-}
-
-function clearStorage() {
-  browser.storage.local.clear();
 }
 
 function setInvestmentOwner() {
@@ -24,4 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('exportAllReports').addEventListener('click', () => { sendMessage('exportAllReports'); });
 
   document.getElementById('investmentOwner').addEventListener('input', setInvestmentOwner);
+  document.getElementById('openWebPanel').addEventListener('click', () => {
+    browser.tabs.create({ url: '/panel/panel.html' })
+  });
 });

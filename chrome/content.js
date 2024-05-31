@@ -200,87 +200,91 @@ async function calculatePlayerShares(investmentData) {
   copyText(output);
 }
 
-function isWithinOneMinute(time1, time2) {
-    // Parse time strings into Date objects
-    const date1 = new Date(`2000-01-01T${time1}`);
-    const date2 = new Date(`2000-01-01T${time2}`);
-
-    // Calculate the difference in milliseconds
-    const difference = Math.abs(date1 - date2);
-
-    // Check if the difference is less than or equal to 1 minute
-    return difference <= 61 * 1000;
-}
-
 async function extractInvestmentInfo() {
+  let investment_table = null, earnings_reports = [];
+  let name = null;
+
   let popup = document.querySelector("investment-popup");
-  let name = popup.querySelector(".cdk-drag-handle.popupTitle").innerText;
-  let investment_table = popup.querySelector("investment-trades").firstChild;
-  let rows = investment_table.querySelectorAll("tr .ng-star-inserted");
-
-  investment_name = name;
-
-  if (!(name in investment_data)) investment_data[name] = [];
-
-  let investment = investment_data[name];
-  let last_entry = null;
-  if (investment.length > 0) {
-    last_entry = investment[investment.length - 1];
+  if (popup !== null) {
+    name = popup.querySelector(".cdk-drag-handle.popupTitle").innerText;
+    investment_table = popup.querySelector("investment-trades");
   }
-  console.log("Last Entry:", last_entry);
+  if (investment_table !== null) { // if looking at share purchases
+    investment_table = investment_table.firstChild;
+    let rows = investment_table.querySelectorAll("tr .ng-star-inserted");
 
-  let new_entries = [];
+    investment_name = name;
 
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    let buy_data = row.children[0].firstChild;
-    let player = buy_data.textContent.trim().slice(0, -4);
-    let order_type;
-    if (buy_data.textContent.trim().slice(-3) === "<<<") {
-      order_type = "buy";
-    } else {
-      order_type = "sell";
+    if (!(name in investment_data)) investment_data[name] = [];
+
+    let investment = investment_data[name];
+    let last_entry = null;
+    if (investment.length > 0) {
+      last_entry = investment[investment.length - 1];
     }
-    let shares = buy_data.nextSibling.nextSibling.textContent.trim();
-    let share_price = row.children[1].firstChild.innerText.trim();
-    let rel_time_bought = row.children[2].innerText; // convert to absolute
+    // console.log("Last Entry:", last_entry);
 
-    shares = symbolToNumber(shares);
-    share_price = symbolToNumber(share_price);
+    let new_entries = [];
 
-    let [abs_time, hour_accurate] = relativeToAbsTime(rel_time_bought); // .toLocaleString();
-    let abs_date = `${abs_time.getMonth() + 1}/${abs_time.getDate()}/${abs_time.getFullYear()}`;
-    let date_time;
-    if (hour_accurate) date_time = createUTCTimestamp(abs_time);
-    else date_time = null;
+    for (let i = 0; i < rows.length; i++) {
+      let row = rows[i];
+      let buy_data = row.children[0].firstChild;
+      let player = buy_data.textContent.trim().slice(0, -4);
+      let order_type;
+      if (buy_data.textContent.trim().slice(-3) === "<<<") {
+        order_type = "buy";
+      } else {
+        order_type = "sell";
+      }
+      let shares = buy_data.nextSibling.nextSibling.textContent.trim();
+      let share_price = row.children[1].firstChild.innerText.trim();
+      let rel_time_bought = row.children[2].innerText; // convert to absolute
 
-    // check if duplicate data
-    //(last_entry["time"] === null || date_time === null || isWithinOneMinute(last_entry["time"], date_time)))
-    if (
-      last_entry !== null &&
-      last_entry["player"] === player &&
-      last_entry["shares"] === shares &&
-      last_entry["share_price"] === share_price &&
-      last_entry["order_type"] === order_type &&
-      last_entry["date"] === abs_date
-    ) {
-      break;
-    } else {
-      new_entries.push({
-        player: player,
-        shares: shares,
-        share_price: share_price,
-        order_type: order_type,
-        date: abs_date,
-        time: date_time,
-      });
-      console.log("new entry by", player);
+      shares = symbolToNumber(shares);
+      share_price = symbolToNumber(share_price);
+
+      let [abs_time, hour_accurate] = relativeToAbsTime(rel_time_bought); // .toLocaleString();
+      let abs_date = `${
+        abs_time.getMonth() + 1
+      }/${abs_time.getDate()}/${abs_time.getFullYear()}`;
+      let date_time;
+      if (hour_accurate) date_time = createUTCTimestamp(abs_time);
+      else date_time = null;
+
+      if (
+        last_entry !== null &&
+        last_entry["player"] === player &&
+        last_entry["shares"] === shares &&
+        last_entry["share_price"] === share_price &&
+        last_entry["order_type"] === order_type &&
+        last_entry["date"] === abs_date
+      ) {
+        break;
+      } else {
+        new_entries.push({
+          player: player,
+          shares: shares,
+          share_price: share_price,
+          order_type: order_type,
+          date: abs_date,
+          time: date_time,
+        });
+      }
     }
+    for (let i = new_entries.length - 1; i >= 0; i--) {
+      investment_data[name].push(new_entries[i]);
+    }
+    storeData("investment_data", investment_data);
+    calculatePlayerShares(investment_data[investment_name]);
+    return
   }
-  for (let i = new_entries.length - 1; i >= 0; i--) {
-    investment_data[name].push(new_entries[i]);
-  }
-  console.log(investment_data);
+
+  document.querySelectorAll(".cdk-drag-handle.popupTitle").forEach(elem => {
+    console.log(`elem: ${elem.innerText}`)
+    if (elem.innerText.includes("Earning report")) {
+      earnings_report.push(elem);
+    }
+  });
 }
 
 function relativeToAbsTime(time_text) {
@@ -288,7 +292,6 @@ function relativeToAbsTime(time_text) {
   let hour_accurate = true;
   if (time_text.includes("seconds")) {
     rel_time_ms = parseInt(time_text.split(" ")[0]) * 1000;
-    if (rel_time_ms === 0) hour_accurate = false; // not reliable at 0 seconds
   } else if (time_text.includes("minutes")) {
     time_text = time_text.split(" ")[0].split(":");
     rel_time_ms = (parseInt(time_text[0]) * 60 + parseInt(time_text[1])) * 1000;
@@ -467,6 +470,8 @@ async function loadLocalData(key) {
 async function storeData(key, data) {
   let stored_data = await loadLocalData(key);
 
+  console.log("STORING DATA");
+
   if (stored_data === null) stored_data = [];
 
   stored_data = data;
@@ -489,6 +494,11 @@ function checkForPageChange() {
   }
 }
 
+async function resetInvestmentData() {
+  let data = await loadLocalData("investment_data");
+  investment_data = data || {};
+}
+
 function clearStorage() {
   chrome.storage.local.clear();
   investment_data = {};
@@ -503,16 +513,15 @@ chrome.runtime.onMessage.addListener((message) => {
       case "storeEmpireInfo":
         extractEmpireInfo();
         storeEmpireInfo();
-        // storeData('empire_data', empire_data);
         break;
       case "exportResourceCsv":
         extractEmpireInfo();
         exportSingleReport("resources", "csv");
         break;
       case "storeInvestmentInfo":
-        extractInvestmentInfo();
-        storeData("investment_data", investment_data);
-        calculatePlayerShares(investment_data[investment_name]);
+        resetInvestmentData().then(() => {
+          extractInvestmentInfo();
+        });
         break;
       case "exportInvestmentJson":
         exportInvestmentJson();
@@ -525,12 +534,3 @@ chrome.runtime.onMessage.addListener((message) => {
         break;
     }
   });
-  
-  // load data
-  (async () => {
-    let data = await loadLocalData("investment_data");
-    console.log(investment_data);
-    investment_data = data || {};
-    console.log(investment_data);
-  })();
-  

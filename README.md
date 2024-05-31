@@ -14,6 +14,11 @@
   - In Google Sheets, Data -> Split text into columns
   - In Excel, just paste because the developers are so nice.
 
+# UI To-Do
+- Display times to complete something
+ - When hovering over energy, display time until max / empty
+ - When on a research 
+
 # Modifying
 You're free to modify or add features, just run it by spacealpha's council if your change:
 - significantly alters how the extension is used & what it does

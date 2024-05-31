@@ -5,13 +5,12 @@ function sendMessage(command) {
   });
 }
 
-function clearStorage() {
-  chrome.storage.local.clear();
-}
-
 function setInvestmentOwner() {
+  console.log("SET investment owner");
   let value = document.getElementById('investmentOwner').value;
-  chrome.storage.local.set({investment_owner: value});
+  chrome.storage.local.set({investment_owner: value}, () => {
+    if (chrome.runtime.lastError) console.log('[SpaceAlpha-Buddy] Error while setting local storage');
+  });
 }
 
 // Attach click event listener to the button
@@ -24,4 +23,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('exportAllReports').addEventListener('click', () => { sendMessage('exportAllReports'); });
 
   document.getElementById('investmentOwner').addEventListener('input', setInvestmentOwner);
+  document.getElementById('openWebPanel').addEventListener('click', () => {
+    chrome.tabs.create({ url: '/panel/panel.html' })
+  });
 });
